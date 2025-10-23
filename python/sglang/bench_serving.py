@@ -728,6 +728,57 @@ def get_processor(
     )
 
 
+def sample_code_completion_requests(
+    dataset_path: str,
+    num_prompts: int,
+    tokenizer: PreTrainedTokenizerBase,
+    input_len: int = 512,
+    output_len: int = 128,
+) -> List[Tuple[str, int, int]]:
+    """Load code completion dataset from file.
+      
+    Args:
+        dataset_path: Path to train.txt/dev.txt/test.txt  
+        num_prompts: Number of samples to load  
+        tokenizer: Tokenizer for encoding  
+        input_len: Target input length (prefix)  
+        output_len: Target output length (completion)  
+      
+    Returns:
+        List of (prompt, prompt_len, output_len) tuples  
+    """
+    requests = []
+      
+    with open(dataset_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+      
+    # Shuffle and sample  
+    random.shuffle(lines)
+    lines = lines[:num_prompts]
+      
+    for line in lines:
+        # Remove <s> and </s> tags  
+        code = line.strip().replace('<s>', '').replace('</s>', '').strip()
+          
+        # Tokenize to get length  
+        tokens = tokenizer.encode(code)
+          
+        if len(tokens) < input_len + output_len:
+            # Skip too short samples  
+            continue
+          
+        # Split into prefix (input) and suffix (expected output)  
+        prefix_tokens = tokens[:input_len]
+        prefix_text = tokenizer.decode(prefix_tokens)
+          
+        requests.append((prefix_text, input_len, output_len))
+          
+        if len(requests) >= num_prompts:
+            break
+      
+    return requests
+
+
 def get_dataset(args, tokenizer, model_id=None):
     tokenize_prompt = getattr(args, "tokenize_prompt", False)
     if args.dataset_name == "sharegpt":
@@ -783,6 +834,17 @@ def get_dataset(args, tokenizer, model_id=None):
             processor=processor,
             fixed_output_len=args.random_output_len,
             random_sample=True,
+        )
+    elif args.dataset_name == "code-completion":
+        if not args.dataset_path:
+            raise ValueError("--dataset-path is required for code-completion dataset")
+
+        return sample_code_completion_requests(
+            dataset_path=args.dataset_path,
+            num_prompts=args.num_prompts,
+            tokenizer=tokenizer,
+            input_len=args.random_input_len or 512,
+            output_len=args.random_output_len or 128,
         )
     elif args.dataset_name == "mooncake":
         # For mooncake, we don't generate the prompts here.
@@ -2315,6 +2377,7 @@ if __name__ == "__main__":
             "mmmu",
             "image",
             "mooncake",
+            "code-completion",  # 添加这一行
         ],
         help="Name of the dataset to benchmark on.",
     )
