@@ -839,13 +839,17 @@ def get_dataset(args, tokenizer, model_id=None):
         if not args.dataset_path:
             raise ValueError("--dataset-path is required for code-completion dataset")
 
-        return sample_code_completion_requests(
+        raw_requests = sample_code_completion_requests(
             dataset_path=args.dataset_path,
             num_prompts=args.num_prompts,
             tokenizer=tokenizer,
             input_len=args.random_input_len or 512,
             output_len=args.random_output_len or 128,
         )
+        return [
+            DatasetRow(prompt=p, prompt_len=pl, output_len=ol)
+            for p, pl, ol in raw_requests
+        ]
     elif args.dataset_name == "mooncake":
         # For mooncake, we don't generate the prompts here.
         # We just load the raw trace data. The async generator will handle the rest.
